@@ -1,0 +1,51 @@
+[build-system]
+requires = ["setuptools", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "steamwebapi.py"
+description = "An async wrapper for the SteamWebAPI api."
+readme = "README.md"
+authors = [{ name = "fretgfr", email = "fretgfr@sudomail.com" }]
+license = { file = "LICENSE" }
+classifiers = [
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python",
+    "Programming Language :: Python :: 3",
+    "Framework :: AsyncIO",
+    "Operating System :: OS Independent",
+    "Topic :: Software Development :: Libraries",
+    "Typing :: Typed",
+    "Development Status :: 4 - Beta",
+]
+keywords = ["steam", "api wrapper", "steamwebapi"]
+dependencies = ["aiohttp>=3.7.4,<4"]
+requires-python = ">=3.8"
+dynamic = ["version"]
+
+[project.optional-dependencies]
+dev = ["black", "isort", "typing_extensions"]
+docs = ["sphinx", "sphinx-rtd-theme"]
+
+[project.urls]
+Homepage = "https://github.com/fretgfr/steamwebapi.py/"
+Documentation = "https://steamwebapipy.readthedocs.io/en/latest/"
+Issues = "https://github.com/fretgfr/steamwebapi.py/issues"
+
+[tool.setuptools]
+packages = ["steamwebapi"]
+
+[tool.setuptools.dynamic]
+version = { attr = "steamwebapi.meta.__version__" }
+
+[tool.black]
+line-length = 125
+
+[tool.isort]
+profile = "black"
+combine_as_imports = true
+combine_star = true
+line_length = 125
+
+[tool.pyright]
+typeCheckingMode = "standard"
