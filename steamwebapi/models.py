@@ -862,13 +862,13 @@ class StickerData:
     def _from_data(cls, data: Dict[str, Any]) -> StickerData:
         return cls(
             data["slot"],
-            data["sticker_id"],
+            data["stickerid"],
             data.get("wear"),
             data.get("scale"),
             data.get("rotation"),
-            data.get("tint_id"),
-            data.get("offset_x"),
-            data.get("offset_y"),
+            data.get("tintid"),
+            data.get("offsetx"),
+            data.get("offsety"),
             data["name"],
             data["image"],
         )
