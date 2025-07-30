@@ -22,6 +22,8 @@ SOFTWARE.
 
 from __future__ import annotations
 
+from typing import Any
+
 __all__ = (
     "SteamWebAPIError",
     "HTTPError",
@@ -42,9 +44,23 @@ class SteamWebAPIError(Exception):
 
 
 class HTTPError(SteamWebAPIError):
-    """Base class for HTTP related exceptions."""
+    """Base class for HTTP related exceptions.
 
-    pass
+    Attributes
+    ----------
+    error: Any
+        The error given.
+    code: :class:`int`
+        The HTTP status code of the error.
+    message: Any
+        A descriptive message returned by the api for what caused the error.
+    """
+
+    def __init__(self, error: Any, code: int, message: Any):
+        super().__init__(f"{code}: {message}")
+        self.error = error
+        self.code = code
+        self.message = message
 
 
 class UnhandledError(HTTPError):
@@ -65,14 +81,14 @@ class Forbidden(HTTPError):
     pass
 
 
-class NotFound(SteamWebAPIError):
+class NotFound(HTTPError):
     """Server returned a 404 response."""
 
     pass
 
 
 class RateLimited(SteamWebAPIError):
-    """Server returned a 429 response."""
+    """Server returned a 429 response. This does **not** subclass HTTPError."""
 
     pass
 

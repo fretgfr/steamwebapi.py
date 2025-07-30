@@ -22,7 +22,9 @@ SOFTWARE.
 
 from __future__ import annotations
 
+import asyncio
 import json
+import logging
 from platform import python_version
 from typing import Any, Dict, Literal, Optional, Union
 
@@ -42,7 +44,9 @@ from .errors import (
 from .meta import __version__
 
 HTTP_METHOD = Literal["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "TRACE", "CONNECT", "OPTIONS"]
+RATELIMIT_MAX_TIMEOUT_SECONDS = 30.0
 
+logger = logging.getLogger(__name__)
 
 try:
     import orjson  # type: ignore
@@ -86,11 +90,14 @@ class Route:
 class HTTPClient:
     """Handles requests to the API, should not be used externally."""
 
-    def __init__(self, token: str, session: Optional[aiohttp.ClientSession] = None):
+    REQUEST_LOG = "{method} {url} with {json} has returned {status}"
+
+    def __init__(self, token: str, production: bool, session: Optional[aiohttp.ClientSession] = None):
         url = URL("https://www.steamwebapi.com/")
         self.base_url = f"{url.scheme}://{url.host}"
 
         self.token = token
+        self.production = production
         self.session: aiohttp.ClientSession = session or aiohttp.ClientSession()
 
         self.user_agent = f"steamwebapi.py v{__version__} - Python-{python_version()} aiohttp-{aiohttp.__version__}"
@@ -115,9 +122,11 @@ class HTTPClient:
         method = route.method
         url = f"{self.base_url}{route.path}"
 
-        headers = {
-            "User-Agent": self.user_agent,
-            "Authorization": self.token,
+        headers = {"User-Agent": self.user_agent}
+
+        params = {
+            "key": self.token,
+            "production": "1" if self.production else "0",
         }
 
         if "headers" in kwargs:
@@ -126,28 +135,62 @@ class HTTPClient:
         if "json" in kwargs:
             headers["Content-Type"] = "application/json"
 
-        async with self.session.request(method, url, headers=headers, **kwargs) as resp:
-            status = resp.status
+        if "params" in kwargs:
+            params.update(kwargs.pop("params"))
 
-            data = await self._json_text_or_bytes(resp)
+        for tries in range(5):
+            async with self.session.request(method, url, headers=headers, **kwargs) as resp:
+                status = resp.status
 
-            error = data.get("error", "") if isinstance(data, Dict) else data
-            if status == 400:
-                raise BadRequest(error, status)
-            elif status == 401:
-                raise NotAuthenticated(error, status)
-            elif status == 403:
-                raise Forbidden(error, status)
-            elif status == 404:
-                raise NotFound(error, status)
-            elif status == 429:
-                raise RateLimited(error, status)
-            elif 405 <= status < 500:
-                raise SteamWebAPIError(error, status)
-            elif status >= 500:
-                raise ServerError(error, status)
+                logger.debug(
+                    self.REQUEST_LOG.format(
+                        method=method,
+                        url=url,
+                        json=kwargs.get("json", None),
+                        status=status,
+                    )
+                )
 
-            if 200 <= status < 300:
-                return data
+                data = await self._json_text_or_bytes(resp)
 
-        raise UnhandledError(error, status)
+                error = data.get("error", "") if isinstance(data, Dict) else data
+                message = data.get("message", "") if isinstance(data, Dict) else data
+                if status == 400:
+                    raise BadRequest(error, status, message)
+                elif status == 401:
+                    raise NotAuthenticated(error, status, message)
+                elif status == 403:
+                    raise Forbidden(error, status, message)
+                elif status == 404:
+                    raise NotFound(error, status, message)
+                elif status == 429:
+                    response_headers = resp.headers
+
+                    # Retry the status after this amount of time
+                    retry_after: float = float(response_headers["X-Ratelimit-Reset"])
+                    if retry_after == 0 and not response_headers.get("X-Ratelimit-Remaining"):
+                        retry_after: float = float(response_headers["Retry-After"])
+
+                    msg = "We are being ratelimited. Retrying in %s seconds"
+                    logger.warning(msg, retry_after)
+
+                    if retry_after > RATELIMIT_MAX_TIMEOUT_SECONDS:
+                        raise RateLimited(error, status, message)
+
+                    await asyncio.sleep(retry_after)  # Sleep until no ratelimit.
+                    continue
+
+                elif 405 <= status < 500:
+                    raise SteamWebAPIError(error, status, message)
+                elif status >= 500:
+                    #  Four tries until we give up on this request.
+                    if tries == 4:
+                        raise ServerError(error, status, message)
+                    else:
+                        await asyncio.sleep(1 + tries * 2)
+                        continue
+
+                if 200 <= status < 300:
+                    return data
+
+            raise UnhandledError(error, status, message)
