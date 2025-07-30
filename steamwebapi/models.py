@@ -856,7 +856,7 @@ class StickerData:
     offset_x: Optional[float]  # TODO: Confirm
     offset_y: Optional[float]  # TODO: Confirm
     name: str
-    image: str
+    image: Optional[str]  # TODO: Confirm, didn't seem to be present when it wasn't optional
 
     @classmethod
     def _from_data(cls, data: Dict[str, Any]) -> StickerData:
@@ -870,5 +870,5 @@ class StickerData:
             data.get("offsetx"),
             data.get("offsety"),
             data["name"],
-            data["image"],
+            data.get("image"),
         )
