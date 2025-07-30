@@ -108,7 +108,10 @@ class HTTPClient:
     async def _json_text_or_bytes(self, response: aiohttp.ClientResponse) -> Union[Dict[str, Any], str, bytes]:
         content_type = response.headers.get("Content-Type")
 
-        if content_type == "application/octet-stream":
+        if not content_type:
+            return await response.read()
+
+        if content_type == "application/octet-stream" or content_type.startswith("image/"):
             return await response.read()
 
         text = await response.text(encoding="utf-8")
@@ -139,7 +142,7 @@ class HTTPClient:
             params.update(kwargs.pop("params"))
 
         for tries in range(5):
-            async with self.session.request(method, url, headers=headers, **kwargs) as resp:
+            async with self.session.request(method, url, headers=headers, params=params, **kwargs) as resp:
                 status = resp.status
 
                 logger.debug(
